@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DropPulse P2P - Zero Storage Transfer</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/peerjs@1.5.2/dist/peerjs.min.js"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    body {
+      background-color: #0b0f19;
+      color: #f3f4f6;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+    }
+    .glass-card {
+      background: rgba(17, 24, 39, 0.7);
+      backdrop-filter: blur(16px);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+    }
+    .neon-border {
+      border: 1px solid rgba(59, 130, 246, 0.4);
+      box-shadow: 0 0 15px rgba(59, 130, 246, 0.2);
+    }
+    .neon-pulse {
+      box-shadow: 0 0 20px rgba(168, 85, 247, 0.4);
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col justify-between p-4 md:p-8">
+
+  <!-- Header -->
+  <header class="max-w-4xl mx-auto w-full flex justify-between items-center py-4 border-b border-gray-800 mb-8">
+    <div class="flex items-center gap-3">
+      <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-600 to-purple-600 flex items-center justify-center font-bold text-xl shadow-lg">
+        ⚡
+      </div>
+      <div>
+        <h1 class="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-purple-400">
+          DropPulse P2P
+        </h1>
+        <p class="text-xs text-gray-400">Zero-Storage Direct WebRTC Streaming</p>
+      </div>
+    </div>
+    <div class="flex items-center gap-2 bg-emerald-950/50 border border-emerald-500/30 text-emerald-400 text-xs px-3 py-1.5 rounded-full">
+      <span class="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
+      Direct RAM Stream
+    </div>
+  </header>
+
+  <!-- Main Content Container -->
+  <main class="max-w-4xl mx-auto w-full grid grid-cols-1 md:grid-cols-2 gap-6">
+
+    <!-- Sender Section -->
+    <section class="glass-card rounded-2xl p-6 flex flex-col justify-between border-t-2 border-t-blue-500">
+      <div>
+        <div class="flex justify-between items-center mb-4">
+          <h2 class="text-lg font-semibold text-blue-400 flex items-center gap-2">
+            <i class="fa-solid fa-paper-plane"></i> Send Files (Host)
+          </h2>
+          <span id="senderStatus" class="text-xs px-2.5 py-1 rounded-md bg-gray-800 text-gray-400">Initializing...</span>
+        </div>
+
+        <!-- Room Code Display -->
+        <div class="mb-6 p-4 bg-gray-900/80 rounded-xl border border-gray-800 text-center">
+          <p class="text-xs text-gray-400 mb-1">Your 6-Digit Transfer Code:</p>
+          <div class="flex items-center justify-center gap-3">
+            <span id="myCode" class="text-3xl font-mono font-bold tracking-widest text-blue-400">------</span>
+            <button onclick="copyCode()" class="p-2 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg text-sm transition">
+              <i class="fa-regular fa-copy"></i>
+            </button>
+          </div>
+        </div>
+
+        <!-- File Upload Area -->
+        <div class="mb-4">
+          <label class="block text-xs text-gray-400 mb-2">Select Photos or Videos from Device:</label>
+          <input type="file" id="fileInput" multiple accept="image/*,video/*" class="hidden" onchange="handleFileSelect(event)">
+          <div onclick="document.getElementById('fileInput').click()" class="border-2 border-dashed border-gray-700 hover:border-blue-500 rounded-xl p-6 text-center cursor-pointer bg-gray-900/40 transition">
+            <i class="fa-solid fa-cloud-arrow-up text-3xl text-gray-500 mb-2"></i>
+            <p class="text-sm font-medium text-gray-300">Click to choose media files</p>
+            <p class="text-xs text-gray-500 mt-1">Photos & Videos (Unlimited size)</p>
+          </div>
+        </div>
+
+        <!-- Staged Files Preview List -->
+        <div id="stagedList" class="space-y-2 max-h-40 overflow-y-auto pr-1"></div>
+      </div>
+
+      <div class="mt-6">
+        <button onclick="sendFiles()" id="sendBtn" disabled class="w-full py-3 bg-blue-600 hover:bg-blue-500 disabled:opacity-40 disabled:hover:bg-blue-600 text-white font-medium rounded-xl transition shadow-lg flex items-center justify-center gap-2">
+          <i class="fa-solid fa-bolt"></i> Stream Selected Files Directly
+        </button>
+      </div>
+    </section>
+
+    <!-- Receiver Section -->
+    <section class="glass-card rounded-2xl p-6 flex flex-col justify-between border-t-2 border-t-purple-500">
+      <div>
+        <div class="flex justify-between items-center mb-4">
+          <h2 class="text-lg font-semibold text-purple-400 flex items-center gap-2">
+            <i class="fa-solid fa-download"></i> Receive Files
+          </h2>
+          <span id="receiverStatus" class="text-xs px-2.5 py-1 rounded-md bg-gray-800 text-gray-400">Idle</span>
+        </div>
+
+        <!-- Join Room Form -->
+        <div class="mb-6">
+          <label class="block text-xs text-gray-400 mb-2">Enter Sender's 6-Digit Code:</label>
+          <div class="flex gap-2">
+            <input type="text" id="joinCodeInput" maxlength="6" placeholder="E.g. 849201" class="w-full bg-gray-900 border border-gray-700 rounded-xl px-4 py-2.5 text-center text-lg font-mono tracking-widest text-white uppercase focus:outline-none focus:border-purple-500">
+            <button onclick="connectToPeer()" class="px-5 bg-purple-600 hover:bg-purple-500 text-white font-medium rounded-xl transition">
+              Connect
+            </button>
+          </div>
+        </div>
+
+        <!-- Incoming Files Stream View -->
+        <div class="space-y-2">
+          <h3 class="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Received Media Stream:</h3>
+          <div id="receivedList" class="space-y-2 max-h-56 overflow-y-auto pr-1">
+            <div class="text-center py-8 border border-dashed border-gray-800 rounded-xl text-gray-600 text-xs">
+              Waiting for sender to stream media...
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="mt-6 text-center">
+        <p class="text-xs text-gray-500">
+          <i class="fa-solid fa-shield-halved text-emerald-400 mr-1"></i> End-to-end P2P encrypted stream.
+        </p>
+      </div>
+    </section>
+  </main>
+
+  <!-- Notice Footer -->
+  <footer class="max-w-4xl mx-auto w-full text-center py-6 text-xs text-gray-500 border-t border-gray-800 mt-8">
+    <p>Both devices must keep their browser tabs open during direct streaming transfer.</p>
+  </footer>
+
+  <script>
+    let peer = null;
+    let conn = null;
+    let selectedFiles = [];
+    let generatedCode = '';
+
+    // Generate random 6-digit numeric room code
+    function generate6DigitCode() {
+      return Math.floor(100000 + Math.random() * 900000).toString();
+    }
+
+    // Initialize PeerJS
+    function initPeer() {
+      generatedCode = generate6DigitCode();
+      document.getElementById('myCode').innerText = generatedCode;
+
+      // Initialize peer connection with 6-digit prefix ID
+      peer = new Peer('dp-' + generatedCode);
+
+      peer.on('open', (id) => {
+        document.getElementById('senderStatus').innerText = 'Ready to Host';
+        document.getElementById('senderStatus').className = 'text-xs px-2.5 py-1 rounded-md bg-blue-950 text-blue-400 border border-blue-800/40';
+      });
+
+      // Handle incoming receiver connections
+      peer.on('connection', (connection) => {
+        conn = connection;
+        setupConnectionListeners();
+        document.getElementById('senderStatus').innerText = 'Connected to Receiver';
+        document.getElementById('senderStatus').className = 'text-xs px-2.5 py-1 rounded-md bg-emerald-950 text-emerald-400 border border-emerald-800/40';
+      });
+
+      peer.on('error', (err) => {
+        console.error('Peer error:', err);
+        if (err.type === 'unavailable-id') {
+          initPeer(); // Regenerate code if collision occurs
+        }
+      });
+    }
+
+    // Handle File Pick Selection
+    function handleFileSelect(e) {
+      const files = Array.from(e.target.files);
+      selectedFiles = [...selectedFiles, ...files];
+      renderStagedFiles();
+    }
+
+    function renderStagedFiles() {
+      const list = document.getElementById('stagedList');
+      list.innerHTML = '';
+
+      selectedFiles.forEach((file, index) => {
+        const sizeMB = (file.size / (1024 * 1024)).toFixed(2);
+        const item = document.createElement('div');
+        item.className = 'flex justify-between items-center p-2.5 bg-gray-900/90 rounded-lg border border-gray-800 text-xs';
+        item.innerHTML = `
+          <div class="flex items-center gap-2 overflow-hidden">
+            <i class="${file.type.startsWith('video/') ? 'fa-solid fa-file-video text-purple-400' : 'fa-solid fa-file-image text-blue-400'} text-base"></i>
+            <span class="truncate max-w-[150px] font-medium text-gray-200">${file.name}</span>
+            <span class="text-gray-500">(${sizeMB} MB)</span>
+          </div>
+          <button onclick="removeStagedFile(${index})" class="text-gray-500 hover:text-red-400 px-1">
+            <i class="fa-solid fa-xmark"></i>
+          </button>
+        `;
+        list.appendChild(item);
+      });
+
+      document.getElementById('sendBtn').disabled = selectedFiles.length === 0;
+    }
+
+    function removeStagedFile(index) {
+      selectedFiles.splice(index, 1);
+      renderStagedFiles();
+    }
+
+    // Copy Room Code
+    function copyCode() {
+      navigator.clipboard.writeText(generatedCode);
+      alert('Room code copied: ' + generatedCode);
+    }
+
+    // Receiver: Connect to Host Peer using 6-Digit Code
+    function connectToPeer() {
+      const inputCode = document.getElementById('joinCodeInput').value.trim();
+      if (inputCode.length !== 6) {
+        alert('Please enter a valid 6-digit code.');
+        return;
+      }
+
+      document.getElementById('receiverStatus').innerText = 'Connecting...';
+      conn = peer.connect('dp-' + inputCode);
+      setupConnectionListeners();
+    }
+
+    // Data Transfer Connection Listeners
+    function setupConnectionListeners() {
+      conn.on('open', () => {
+        document.getElementById('receiverStatus').innerText = 'Connected';
+        document.getElementById('receiverStatus').className = 'text-xs px-2.5 py-1 rounded-md bg-emerald-950 text-emerald-400 border border-emerald-800/40';
+      });
+
+      // Handle receiving streamed chunks/files directly in RAM
+      conn.on('data', (data) => {
+        if (data.type === 'file-start') {
+          clearInitialPlaceholder();
+        } else if (data.type === 'file-complete') {
+          renderReceivedFile(data);
+        }
+      });
+
+      conn.on('close', () => {
+        document.getElementById('receiverStatus').innerText = 'Disconnected';
+        document.getElementById('receiverStatus').className = 'text-xs px-2.5 py-1 rounded-md bg-gray-800 text-gray-400';
+      });
+    }
+
+    // Sender: Stream Files Direct to Peer
+    function sendFiles() {
+      if (!conn || !conn.open) {
+        alert('No connected receiver found. Ask the receiver to enter your code first!');
+        return;
+      }
+
+      selectedFiles.forEach((file) => {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          const buffer = e.target.result;
+          conn.send({ type: 'file-start' });
+          conn.send({
+            type: 'file-complete',
+            name: file.name,
+            fileType: file.type,
+            buffer: buffer
+          });
+        };
+        reader.readAsArrayBuffer(file);
+      });
+
+      alert('Streaming ' + selectedFiles.length + ' file(s) directly to recipient!');
+      selectedFiles = [];
+      renderStagedFiles();
+    }
+
+    function clearInitialPlaceholder() {
+      const container = document.getElementById('receivedList');
+      if (container.querySelector('.text-center')) {
+        container.innerHTML = '';
+      }
+    }
+
+    // Receiver: Display and Download Streamed File
+    function renderReceivedFile(fileData) {
+      const container = document.getElementById('receivedList');
+      const blob = new Blob([fileData.buffer], { type: fileData.fileType });
+      const url = URL.createObjectURL(blob);
+      const isVideo = fileData.fileType.startsWith('video/');
+
+      const card = document.createElement('div');
+      card.className = 'p-3 bg-gray-900/90 border border-gray-800 rounded-xl space-y-2';
+
+      let mediaPreview = isVideo
+        ? `<video src="${url}" controls class="w-full max-h-40 object-cover rounded-lg bg-black mb-2"></video>`
+        : `<img src="${url}" class="w-full max-h-40 object-cover rounded-lg mb-2">`;
+
+      card.innerHTML = `
+        ${mediaPreview}
+        <div class="flex justify-between items-center text-xs">
+          <span class="font-medium text-gray-200 truncate max-w-[180px]">${fileData.name}</span>
+          <a href="${url}" download="${fileData.name}" class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg flex items-center gap-1 font-medium transition">
+            <i class="fa-solid fa-download"></i> Save
+          </a>
+        </div>
+      `;
+
+      container.appendChild(card);
+    }
+
+    // Initialize application on load
+    window.addEventListener('DOMContentLoaded', initPeer);
+  </script>
+</body>
+</html>
